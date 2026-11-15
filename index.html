@@ -112,6 +112,11 @@ const askCopy=id=>{const f=S.fac.find(x=>x.id==id);showM(`<h2>Guarda la copia</h
 
 async function copyR(id){const r=S.rec.find(x=>x.id==id);if(await shareFiles([mk(recPDF([r]),'recibo_'+r.fecha+'_'+r.nombre.replace(/[^A-Za-z0-9]+/g,'-')+'.pdf')])===true){r.copia=true;save();render()}}
 const askCopyR=id=>showM(`<h2>Guarda la copia</h2><p>Guarda el recibo en tu carpeta de recibos de Drive para que no se pierda.</p><button class="btn g" onclick="copyR('${id}');closeM()">💾 Guardar copia ahora</button><button class="btn s" style="margin:0" onclick="closeM()">Más tarde</button>`);
+const steps=(t,l,fn)=>showM(`<h2>${t}</h2><ol style="padding-left:24px;font-size:20px;line-height:1.6">${l.map(s=>`<li>${s}</li>`).join('')}</ol><button class="btn" onclick="closeM();${fn}">Continuar</button><button class="btn s" style="margin:0" onclick="closeM()">Cancelar</button>`);
+const askPrint=id=>steps('Para imprimir',['Se abre una lista de aplicaciones.','Busca y selecciona <b>HP Print</b>.'],"printF('"+id+"')");
+const askPrintR=()=>steps('Para imprimir',['Se abre una lista de aplicaciones.','Busca y selecciona <b>HP Print</b>.'],'printR()');
+const askSend=id=>steps('Para enviar',['Se abre una lista de aplicaciones.','Selecciona <b>Yahoo</b> y escribe la dirección de correo,<br>o selecciona <b>WhatsApp</b> y el contacto.'],"sendF('"+id+"')");
+const askTrim=()=>steps('Para enviar al gestor',['Se abre una lista de aplicaciones.','Selecciona <b>Yahoo</b> y escribe la dirección de correo de la gestora.'],'sendTrim()');
 /* ---------- pantallas ---------- */
 let view='home',arg=null,ftr=null,cq='',chk=new Set();
 const V={},BACK={ff:'fl',fd:'fl',rf:'rl',cf:'cl',pend:'home',aj:'home'},NAV={pend:'home',aj:'home',ff:'fl',fd:'fl',rf:'rl',cf:'cl'};
@@ -165,8 +170,8 @@ V.fd=id=>{const f=S.fac.find(x=>x.id==id);if(!f)return'';
  <div style="font-size:21px;margin:6px 0">${esc(f.nombre)}</div><div class=mut>${esc(f.calle)}</div>
  <div class="tot t"><span>Total</span><span>${eur(f.total)} €</span></div><div class=mut>Sin IVA ${eur(f.base)} € · IVA ${eur(f.iva)} € · Carpeta ${trL(f.trim)}</div>
  <div style="margin-top:10px">${tags(f)}</div></div>
- ${f.estado=='anulada'?'':`<button class=btn onclick="sendF('${id}')">📤 Enviar (WhatsApp o Yahoo)</button>
- <button class="btn s" onclick="printF('${id}')">🖨️ Imprimir</button><div class=mut style="margin:-4px 0 12px">Al imprimir, elige <b>HP Smart</b> en el menú.</div>
+ ${f.estado=='anulada'?'':`<button class=btn onclick="askSend('${id}')">📤 Enviar (WhatsApp o Yahoo)</button>
+ <button class="btn s" onclick="askPrint('${id}')">🖨️ Imprimir</button>
  <button class="btn ${f.copia?'s':'g'}" onclick="copyF('${id}')">💾 ${f.copia?'Guardar otra copia':'Guardar copia en Drive ('+trL(f.trim)+')'}</button>
  <button class="btn s" onclick="go('ff','${id}')">✏️ Corregir</button>
  <button class="btn r" onclick="anular('${id}')">Anular factura</button>`}`};
@@ -176,9 +181,9 @@ V.fl=()=>{ftr=ftr||trimOf(today());
  return `<button class=btn onclick="go('ff')">➕ Nueva factura</button>
  <select style="margin-bottom:12px" onchange="ftr=this.value;render()">${ts.map(t=>`<option value="${t}" ${t==ftr?'selected':''}>Trimestre ${trL(t)}</option>`).join('')}</select>
  ${L.map(f=>`<div class=card style="${f.estado=='anulada'?'opacity:.55':''}" onclick="go('fd','${f.id}')"><div class=row><b>Nº ${f.num} · ${esc(f.nombre)}</b><b>${eur(f.total)} €</b></div><div class=mut>${fdate(f.fecha)}</div>${tags(f)}</div>`).join('')||'<p class=mut>Todavía no hay facturas en este trimestre.</p>'}
- ${ok.length?`<button class="btn s" onclick="sendTrim()">📤 Enviar las ${ok.length} facturas al gestor</button>`:''}`};
+ ${ok.length?`<button class="btn s" onclick="askTrim()">📤 Enviar las ${ok.length} facturas al gestor</button>`:''}`};
 V.rl=()=>`<button class=btn onclick="go('rf')">➕ Nuevo recibo</button>
- ${chk.size?`<button class="btn g" onclick="printR()">🖨️ Imprimir los ${chk.size} marcados</button>`:'<p class=mut>Marca hasta 3 recibos para imprimirlos juntos en una hoja.</p>'}
+ ${chk.size?`<button class="btn g" onclick="askPrintR()">🖨️ Imprimir los ${chk.size} marcados</button>`:'<p class=mut>Marca hasta 3 recibos para imprimirlos juntos en una hoja.</p>'}
  ${S.rec.slice().sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(r=>`<div class=card><label class=row style="margin:0"><span><input type=checkbox style="width:26px;height:26px;vertical-align:middle" ${chk.has(r.id)?'checked':''} onchange="tg('${r.id}')"> <b>${esc(r.nombre)}</b></span><b>${eur(r.total)} €</b></label><div class=mut style="margin:2px 0 4px">${fdate(r.fecha)}</div><span class="tag ${r.copia?'k':'w'}">${r.copia?'Copia en Drive':'Falta copia en Drive'}</span><div style="height:8px"></div>
  <div class=row><button class="btn s m" onclick="go('rf','e${r.id}')">Editar</button><button class="btn s m" onclick="go('rf','r${r.id}')">Repetir</button><button class="btn r m" onclick="delR('${r.id}')">Borrar</button></div></div>`).join('')}`;
 function tg(id){if(chk.has(id))chk.delete(id);else if(chk.size>=3){alert('Caben 3 recibos en una hoja.');}else chk.add(id);render()}
