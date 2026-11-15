@@ -78,7 +78,7 @@ function drawF(d,f,y){
  d.setLineWidth(.3);d.rect(L,t,R-L,74);ys.forEach(v=>d.line(L,v,R,v));d.line(105,t,105,t+38);d.line(105,t+38,105,t+74);
  d.setFont('helvetica','bold');d.text('FACTURA Nº: '+f.num,L+2,t+6.5);d.text('DESTINATARIO:',107,t+6.5);
  d.text('CONCEPTO:',L+2,t+44);d.text('IMPORTE:',107,t+44);
- d.setFont('helvetica','normal');d.text('Fdo.:',L+2,t+16);
+ d.setFont('helvetica','normal');d.text('Fdo.:',L+2,t+16);if(m.firma)d.addImage(m.firma,'PNG',L+12,t+13,50,20);
  d.text(d.splitTextToSize([f.nombre,f.calle,f.nif].filter(Boolean).join('\n'),86),107,t+16);
  d.text(d.splitTextToSize(f.concepto||'',88),L+2,t+53);d.text(eur(f.base)+' €',R-2,t+53,{align:'right'});
  d.text('+21% IVA',L+2,t+62);d.text(eur(f.iva)+' €',R-2,t+62,{align:'right'});
@@ -88,7 +88,7 @@ function facPDF(f,n){const d=PDF();for(let i=0;i<n;i++)drawF(d,f,i*148);return d
 function recPDF(L){const d=PDF();L.forEach((r,i)=>{const y=i*99+14;
  d.setFontSize(12);d.setFont('helvetica','bold');d.text('RECIBO',15,y);d.setFont('helvetica','normal');
  d.text('CONCEPTO: '+(r.concepto||''),15,y+10);d.text('DESTINATARIO: '+r.nombre,15,y+20);d.text('FECHA: '+fdate(r.fecha),15,y+30);
- d.setFont('helvetica','bold');d.text('TOTAL: '+eur(r.total)+' €',195,y+42,{align:'right'});d.setFont('helvetica','normal');d.text('Fdo.:',15,y+54);
+ d.setFont('helvetica','bold');d.text('TOTAL: '+eur(r.total)+' €',195,y+42,{align:'right'});d.setFont('helvetica','normal');d.text('Fdo.:',15,y+54);if(S.me.firma)d.addImage(S.me.firma,'PNG',28,y+44,50,20);
  if(i<2){d.setLineDash([2,2]);d.line(10,y+78,200,y+78);d.setLineDash([])}});return d.output('blob')}
 const fname=f=>`${f.trim}_F${f.num}_${f.nombre.replace(/[^A-Za-z0-9]+/g,'-')}.pdf`;
 const mk=(b,n,t)=>new File([b],n,{type:t||'application/pdf'});
@@ -118,6 +118,14 @@ const askPrintR=()=>steps('Para imprimir',['Se abre una lista de aplicaciones.',
 const askSend=id=>steps('Para enviar',['Se abre una lista de aplicaciones.','Selecciona <b>Yahoo</b> y escribe la dirección de correo,<br>o selecciona <b>WhatsApp</b> y el contacto.'],"sendF('"+id+"')");
 const askTrim=()=>steps('Para enviar al gestor',['Se abre una lista de aplicaciones.','Selecciona <b>Yahoo</b> y escribe la dirección de correo de la gestora.'],'sendTrim()');
 /* ---------- pantallas ---------- */
+let sigDirty=false;
+function initSig(){const c=$('#sg'),x=c.getContext('2d');x.lineWidth=6;x.lineCap='round';x.lineJoin='round';x.strokeStyle='#000';
+ if(S.me.firma){const i=new Image();i.onload=()=>x.drawImage(i,0,0,c.width,c.height);i.src=S.me.firma}
+ let d=false;const pt=e=>{const r=c.getBoundingClientRect();return[(e.clientX-r.left)*c.width/r.width,(e.clientY-r.top)*c.height/r.height]};
+ c.onpointerdown=e=>{d=true;sigDirty=true;c.setPointerCapture(e.pointerId);const[a,b]=pt(e);x.beginPath();x.moveTo(a,b);x.lineTo(a+.1,b);x.stroke()};
+ c.onpointermove=e=>{if(!d)return;const[a,b]=pt(e);x.lineTo(a,b);x.stroke()};
+ c.onpointerup=c.onpointercancel=()=>{d=false}}
+function clrSig(){const c=$('#sg');c.getContext('2d').clearRect(0,0,c.width,c.height);sigDirty=true}
 let view='home',arg=null,ftr=null,cq='',chk=new Set();
 const V={},BACK={ff:'fl',fd:'fl',rf:'rl',cf:'cl',pend:'home',aj:'home'},NAV={pend:'home',aj:'home',ff:'fl',fd:'fl',rf:'rl',cf:'cl'};
 const go=(v,a)=>{view=v;arg=a;render();scrollTo(0,0)},back=()=>go(BACK[view]||'home');
@@ -126,7 +134,7 @@ function render(){
  $('#bk').style.visibility=BACK[view]?'visible':'hidden';
  app.innerHTML=V[view](arg);
  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v==(NAV[view]||view)));
- if(view=='ff')upd();
+ if(view=='ff')upd();if(view=='aj')initSig();
 }
 V.home=()=>{
  const p=S.fac.filter(f=>f.estado!='anulada'&&!f.copia).concat(S.rec.filter(r=>!r.copia)),old=(S.fac.length+S.rec.length)&&(!S.bk||(Date.now()-new Date(S.bk))/864e5>14);
@@ -210,10 +218,13 @@ function delC(id){if(!confirm('¿Borrar este cliente?'))return;S.cli=S.cli.filte
 V.aj=()=>{const m=S.me;
  return `<div class=card><label style="margin-top:0">Tu nombre (como sale en la factura)</label><input id=mn value="${esc(m.nombre)}"><label>NIF</label><input id=mi value="${esc(m.nif)}"><label>Móvil</label><input id=mt inputmode=tel value="${esc(m.tel)}"><label>Dirección (calle, CP y población)</label><input id=md value="${esc(m.dir)}">
  <label>Próximo número de factura</label><input id=mx inputmode=numeric value="${S.next??''}"><label>Concepto de siempre</label><input id=mc value="${esc(S.concepto)}"></div>
+ <div class=card><b>Mi firma</b><p class=mut>Dibuja tu firma con el dedo. Saldrá donde pone «Fdo.».</p><canvas id=sg width=600 height=240 style="width:100%;height:auto;border:2px solid var(--ln);border-radius:12px;background:#fff;touch-action:none"></canvas><button class="btn r m" style="margin-top:10px" onclick="clrSig()">Borrar firma</button></div>
  <button class=btn onclick="saveA()">Guardar</button>
  <div class=card><b>Copia de seguridad</b><p class=mut>Última: ${S.bk?fdate(S.bk):'nunca'}. Guárdala en Drive.</p><button class="btn s" style="margin:0" onclick="backup()">💾 Hacer copia de seguridad</button></div>
  <div class=card><b>Cargar datos de un archivo</b><p class=mut>Para restaurar una copia o importar los clientes de Drive.</p><input type=file accept=".json,text/plain" onchange="imp(this)"></div>`};
-function saveA(){const g=i=>$('#'+i).value.trim();S.me={nombre:g('mn'),nif:g('mi'),tel:g('mt'),dir:g('md')};S.concepto=g('mc')||S.concepto;const x=parseInt(g('mx'));S.next=x||S.next;save();go('home')}
+function saveA(){const g=i=>$('#'+i).value.trim();let fm=S.me.firma||'';
+ if(sigDirty){const c=$('#sg'),blank=!c.getContext('2d').getImageData(0,0,c.width,c.height).data.some((v,i)=>i%4==3&&v>0);fm=blank?'':c.toDataURL('image/png')}sigDirty=false;
+ S.me={nombre:g('mn'),nif:g('mi'),tel:g('mt'),dir:g('md'),firma:fm};S.concepto=g('mc')||S.concepto;const x=parseInt(g('mx'));S.next=x||S.next;save();go('home')}
 function imp(inp){const fl=inp.files[0];if(!fl)return;const rd=new FileReader();rd.onload=()=>{try{const d=JSON.parse(rd.result);
  if(d.fac){if(!confirm('Esto sustituye TODO lo que hay ahora en la app. ¿Seguro?'))return;S=Object.assign({me:{},cli:[],fac:[],rec:[],next:null,concepto:S.concepto,bk:null},d)}
  else{(d.clientes||[]).forEach(addCli);if(d.ultimoNumero&&(S.next==null||S.next<=d.ultimoNumero))S.next=d.ultimoNumero+1}
