@@ -148,16 +148,15 @@ V.ff=id=>{
  <div style="margin-top:12px"><div class=tot><span>IVA 21%</span><b id=iv></b></div><div class="tot t"><span>TOTAL</span><span id=to></span></div></div></div>
  <div class=card><label style="margin-top:0">Fecha</label><input id=fe type=date value="${fe}" onchange="$('#tr').value=trimOf(this.value)">
  <label>Carpeta del trimestre</label><select id=tr>${trimOpts(f.trim||trimOf(fe))}</select>
- <details ${first?'open':''}><summary class=mut style="margin-top:14px;padding:6px 0">Número y concepto</summary>
  <label>Nº de factura${first?' (el de tu última factura + 1)':''}</label><input id=nu inputmode=numeric value="${f.num||S.next||''}">
- <label>Concepto</label><input id=co value="${esc(f.concepto||S.concepto)}"></details></div>
+ <label>Concepto</label><input id=co value="${esc(f.concepto||S.concepto)}"></div>
  <button class=btn onclick="saveF('${id||''}')">Guardar factura</button>`};
 const fillC=id=>{const c=S.cli.find(x=>x.id==id);if(!c)return;$('#n').value=c.nombre;$('#c').value=c.calle;$('#nf').value=c.nif||'';$('#b').value=c.precio||'';upd()};
 function upd(){const b=r2(num($('#b').value)),i=r2(b*.21);$('#iv').textContent=b?eur(i)+' €':'—';$('#to').textContent=b?eur(b+i)+' €':'—'}
 function saveF(id){
  const g=i=>$('#'+i).value.trim(),nombre=g('n'),calle=g('c'),base=r2(num(g('b'))),n=parseInt(g('nu'));
  if(!nombre||!calle||base<=0)return alert('Falta el nombre, la calle o el importe.');
- if(!n)return alert('Falta el número de factura (despliega «Número y concepto»).');
+ if(!n)return alert('Falta el número de factura.');
  if(S.fac.some(f=>f.num==n&&f.id!=id))return alert('Ya existe la factura nº '+n+'.');
  const iva=r2(base*.21),d={num:n,fecha:g('fe'),trim:g('tr'),nombre,calle,nif:g('nf'),base,iva,total:r2(base+iva),concepto:g('co')};
  let f=id&&S.fac.find(x=>x.id==id);
