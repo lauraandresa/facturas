@@ -48,6 +48,7 @@ nav svg{width:26px;height:26px;display:block;margin:0 auto 2px}
 .modal{position:fixed;inset:0;background:#0b1f1e99;display:flex;padding:20px;z-index:9}
 .modal>div{background:#fff;border-radius:22px;padding:22px;width:100%;max-width:520px;margin:auto;box-shadow:0 20px 50px #0006}
 h2{margin:0 0 10px;font-size:24px}
+.pick{background:#eef7f6;border-radius:14px;padding:12px 14px;margin-top:8px}.pick:active{background:var(--acl)}
 </style></head><body>
 <header><button id="bk" onclick="back()"><svg class=i viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><span id="t"></span>
 <button class="rb" onclick="go('rf')"><svg class=i viewBox="0 0 24 24"><path d="M5 2h14v20l-3-2-2 2-2-2-2 2-2-2-3 2zM9 8h6M9 12h6"/></svg>RECIBO</button>
@@ -164,7 +165,7 @@ V.pend=()=>{const p=S.fac.filter(f=>f.estado!='anulada'&&!f.copia).sort((a,b)=>a
 V.ff=id=>{
  const f=id&&S.fac.find(x=>x.id==id)||{},fe=f.fecha||today(),first=S.next==null&&!f.num;
  return `${id&&(f.enviada||f.copia)?'<div class=alert>Esta factura ya la enviaste o la guardaste. Si la cambias, tendrás que enviarla y guardarla otra vez.</div>':''}
- <div class=card><label style="margin-top:0">Cliente</label><select onchange="fillC(this.value)">${cliOpts()}</select>
+ <div class=card><label style="margin-top:0">Buscar cliente</label><input id=cs type=search placeholder="🔍 Escribe el nombre…" autocomplete=off oninput="cSearch()" onfocus="cSearch()"><div id=cr></div>
  <label>Nombre corto (para el archivo y para buscarla)</label><input id=fl value="${esc(f.file)}">
  <label>Nombre completo (el que sale en la factura)</label><input id=n value="${esc(f.nombre)}">
  <label>Calle</label><input id=c value="${esc(f.calle)}">
@@ -176,6 +177,15 @@ V.ff=id=>{
  <label>Nº de factura${first?' (el de tu última factura + 1)':''}</label><input id=nu inputmode=numeric value="${f.num||S.next||''}">
  <label>Concepto</label><input id=co value="${esc(f.concepto||S.concepto)}"></div>
  <button class=btn onclick="saveF('${id||''}')">Guardar factura</button>`};
+function cSearch(){
+ const q=nz($('#cs').value).split(/\s+/).filter(Boolean),al=(a,b)=>(a.file||a.nombre).localeCompare(b.file||b.nombre);
+ let L=S.cli.filter(c=>{const s=nz(c.file+' '+c.nombre);return q.every(w=>s.includes(w))}).sort(al);
+ if(!q.length){const rc=[];S.fac.slice().sort((a,b)=>b.num-a.num).forEach(f=>{const c=S.cli.find(x=>x.nombre==f.nombre);if(c&&!rc.includes(c))rc.push(c)});L=rc.length?rc:L}
+ $('#cr').innerHTML=(q.length||!L.length?'':'<div class=lbl style="margin-top:10px">'+(S.fac.length?'Últimos clientes':'Clientes')+'</div>')
+  +L.slice(0,6).map(c=>`<div class=pick onclick="pickC('${c.id}')"><b>${esc(c.file||c.nombre)}</b><div class=mut>${esc(c.calle)}</div></div>`).join('')
+  +(L.length>6?`<p class=mut style="margin:8px 0 0">Hay ${L.length-6} más. Sigue escribiendo para encontrarlo.</p>`:'')
+  +(q.length&&!L.length?'<p class=mut style="margin:8px 0 0">No hay ningún cliente así. Rellena los datos de abajo y se creará.</p>':'')}
+function pickC(id){fillC(id);const c=S.cli.find(x=>x.id==id);$('#cs').value=c.file||c.nombre;$('#cr').innerHTML='';$('#cs').blur()}
 const fillC=id=>{const c=S.cli.find(x=>x.id==id);if(!c)return;$('#fl').value=c.file||'';$('#n').value=c.nombre;$('#c').value=c.calle;$('#nf').value=c.nif||'';$('#b').value=cm(c.precio);upd()};
 function upd(){const b=r2(num($('#b').value)),i=r2(b*.21);$('#iv').textContent=b?eur(i)+' €':'—';$('#to').textContent=b?eur(b+i)+' €':'—'}
 function saveF(id){
