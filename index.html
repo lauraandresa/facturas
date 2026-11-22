@@ -48,6 +48,8 @@ nav svg{width:26px;height:26px;display:block;margin:0 auto 2px}
 .modal{position:fixed;inset:0;background:#0b1f1e99;display:flex;padding:20px;z-index:9}
 .modal>div{background:#fff;border-radius:22px;padding:22px;width:100%;max-width:520px;margin:auto;box-shadow:0 20px 50px #0006}
 h2{margin:0 0 10px;font-size:24px}
+.seg{display:flex;background:#e4eaea;border-radius:14px;padding:4px;gap:4px}.seg button{flex:1;border:0;background:none;border-radius:11px;min-height:48px;font:700 17px system-ui;color:var(--mut)}.seg button.on{background:#fff;color:var(--ac);box-shadow:var(--sh)}
+.warn{background:#fff7dd;border-left:6px solid #e0a100;border-radius:12px;padding:10px 12px;margin-top:10px;font-weight:600;font-size:16px}
 .pick{background:#eef7f6;border-radius:14px;padding:12px 14px;margin-top:8px}.pick:active{background:var(--acl)}
 </style></head><body>
 <header><button id="bk" onclick="back()"><svg class=i viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><span id="t"></span>
@@ -121,7 +123,7 @@ async function shareFiles(files){
  alert('El móvil no abrió el menú de compartir. El archivo se ha descargado.');return 'dl';
 }
 async function sendF(id){const f=S.fac.find(x=>x.id==id);if(await shareFiles([mk(facPDF(f,1),fname(f))])===true){f.enviada=true;save();render()}}
-async function printF(id,n){const f=S.fac.find(x=>x.id==id);shareFiles([mk(facPDF(f,n||2),'IMPRIMIR_'+fname(f))])}
+async function printF(id){const f=S.fac.find(x=>x.id==id);shareFiles([mk(facPDF(f,f.tablas||copiasOf(f)),'IMPRIMIR_'+fname(f))])}
 async function copyF(id){const f=S.fac.find(x=>x.id==id);if(await shareFiles([mk(facPDF(f,1),fname(f))])===true){f.copia=true;save();render()}}
 async function sendTrim(){const L=S.fac.filter(f=>f.trim==ftr&&f.estado!='anulada').sort((a,b)=>a.num-b.num);shareFiles(L.map(f=>mk(facPDF(f,1),fname(f))))}
 async function printR(id){const r=S.rec.find(x=>x.id==id);shareFiles([mk(recPDF(r.items),'IMPRIMIR_recibos.pdf')])}
@@ -131,8 +133,7 @@ const askCopy=id=>{const f=S.fac.find(x=>x.id==id);showM(`<h2>Guarda la copia</h
 
 const askPrintOffer=id=>showM(`<h2>Recibos guardados</h2><p>¿Los imprimes ahora?</p><button class="btn" onclick="askPrintR('${id}')">🖨️ Imprimir</button><button class="btn s" style="margin:0" onclick="closeM()">Ahora no</button>`);
 const steps=(t,l,fn)=>showM(`<h2>${t}</h2><ol style="padding-left:24px;font-size:20px;line-height:1.6">${l.map(s=>`<li>${s}</li>`).join('')}</ol><button class="btn" onclick="closeM();${fn}">Continuar</button><button class="btn s" style="margin:0" onclick="closeM()">Cancelar</button>`);
-const askPrintSteps=(id,n)=>steps('Para imprimir',['Se abre una lista de aplicaciones.','Busca y selecciona <b>HP Print</b>.'],"printF('"+id+"',"+n+")");
-const askPrint=id=>{const f=S.fac.find(x=>x.id==id);copiasOf(f)==1?showM(`<h2>Una sola tabla</h2><p>Se imprimirá una sola tabla en la hoja. ¿Está bien?</p><button class="btn" onclick="askPrintSteps('${id}',1)">Sí, una tabla</button><button class="btn s" style="margin:0" onclick="askPrintSteps('${id}',2)">No, hacer como todas</button>`):askPrintSteps(id,2)};
+const askPrint=id=>steps('Para imprimir',['Se abre una lista de aplicaciones.','Busca y selecciona <b>HP Print</b>.'],"printF('"+id+"')");
 const askPrintR=id=>steps('Para imprimir',['Se abre una lista de aplicaciones.','Busca y selecciona <b>HP Print</b>.'],"printR('"+id+"')");
 const askSend=id=>steps('Para enviar',['Se abre una lista de aplicaciones.','Selecciona <b>Yahoo</b> y escribe la dirección de correo,<br>o selecciona <b>WhatsApp</b> y el contacto.'],"sendF('"+id+"')");
 const askTrim=()=>steps('Para enviar al gestor',['Se abre una lista de aplicaciones.','Selecciona <b>Yahoo</b> y escribe la dirección de correo de la gestora.'],'sendTrim()');
@@ -153,7 +154,7 @@ function render(){
  $('#bk').style.display=BACK[view]?'grid':'none';
  app.innerHTML=V[view](arg);
  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v==(NAV[view]||view)));
- if(view=='ff')upd();if(view=='aj')initSig();
+ if(view=='ff'){upd();setTb(+$('#sgt').dataset.t)}if(view=='aj')initSig();
 }
 V.home=()=>{
  const p=S.fac.filter(f=>f.estado!='anulada'&&!f.copia),old=(S.fac.length+S.rec.length)&&(!S.bk||(Date.now()-new Date(S.bk))/864e5>7),last=S.fac.slice().sort((a,b)=>b.num-a.num)[0];
@@ -177,8 +178,10 @@ V.ff=id=>{
  <div class=card><label style="margin-top:0">Fecha</label><input id=fe type=date value="${fe}" onchange="$('#tr').value=trimOf(this.value)">
  <label>Carpeta del trimestre</label><select id=tr>${trimOpts(f.trim||trimOf(fe))}</select>
  <label>Nº de factura${first?' (el de tu última factura + 1)':''}</label><input id=nu inputmode=numeric value="${f.num||S.next||''}">
- <label>Concepto</label><input id=co value="${esc(f.concepto||S.concepto)}"></div>
+ <label>Concepto</label><input id=co value="${esc(f.concepto||S.concepto)}">
+ <label>Al imprimir, tablas en la hoja</label><div class=seg id=sgt data-t="${f.tablas||2}"><button type=button data-t=1 onclick="setTb(1)">1 tabla</button><button type=button data-t=2 onclick="setTb(2)">2 tablas</button></div><div id=tbw></div></div>
  <button class=btn onclick="saveF('${id||''}')">Guardar factura</button>`};
+function setTb(n){const s=$('#sgt');s.dataset.t=n;s.querySelectorAll('button').forEach(b=>b.classList.toggle('on',+b.dataset.t==n));$('#tbw').innerHTML=n==1?'<div class=warn>⚠️ Cuidado: se imprimirá una sola tabla en la hoja.</div>':''}
 function cSearch(){
  const q=nz($('#cs').value).split(/\s+/).filter(Boolean),al=(a,b)=>(a.file||a.nombre).localeCompare(b.file||b.nombre);
  let L=S.cli.filter(c=>{const s=nz(c.file+' '+c.nombre);return q.every(w=>s.includes(w))}).sort(al);
@@ -188,18 +191,18 @@ function cSearch(){
   +(L.length>6?`<p class=mut style="margin:8px 0 0">Hay ${L.length-6} más. Sigue escribiendo para encontrarlo.</p>`:'')
   +(q.length&&!L.length?'<p class=mut style="margin:8px 0 0">No hay ningún cliente así. Rellena los datos de abajo y se creará.</p>':'')}
 function pickC(id){fillC(id);const c=S.cli.find(x=>x.id==id);$('#cs').value=c.file||c.nombre;$('#cr').innerHTML='';$('#cs').blur()}
-const fillC=id=>{const c=S.cli.find(x=>x.id==id);if(!c)return;$('#fl').value=c.file||'';$('#n').value=c.nombre;$('#c').value=c.calle;$('#nf').value=c.nif||'';$('#b').value=cm(c.precio);upd()};
+const fillC=id=>{const c=S.cli.find(x=>x.id==id);if(!c)return;$('#fl').value=c.file||'';$('#n').value=c.nombre;$('#c').value=c.calle;$('#nf').value=c.nif||'';$('#b').value=cm(c.precio);upd();setTb(c.copias==1?1:2)};
 function upd(){const b=r2(num($('#b').value)),i=r2(b*.21);$('#iv').textContent=b?eur(i)+' €':'—';$('#to').textContent=b?eur(b+i)+' €':'—'}
 function saveF(id){
  const g=i=>$('#'+i).value.trim(),nombre=g('n'),calle=g('c'),base=r2(num(g('b'))),n=parseInt(g('nu'));
  if(!nombre||!calle||base<=0)return alert('Falta el nombre, la calle o el importe.');
  if(!n)return alert('Falta el número de factura.');
  if(S.fac.some(f=>f.num==n&&f.id!=id))return alert('Ya existe la factura nº '+n+'.');
- const iva=r2(base*.21),d={num:n,fecha:g('fe'),trim:g('tr'),nombre,file:g('fl')||nombre,calle,nif:g('nf'),base,iva,total:r2(base+iva),concepto:g('co')};
+ const iva=r2(base*.21),d={num:n,fecha:g('fe'),trim:g('tr'),nombre,file:g('fl')||nombre,calle,nif:g('nf'),base,iva,total:r2(base+iva),concepto:g('co'),tablas:+$('#sgt').dataset.t};
  let f=id&&S.fac.find(x=>x.id==id);
  if(f){if(f.enviada||f.copia){f.hist=(f.hist||[]).concat([{num:f.num,fecha:f.fecha,nombre:f.nombre,calle:f.calle,nif:f.nif,base:f.base,total:f.total,en:today()}]);f.corr=true;f.enviada=false;f.copia=false}Object.assign(f,d)}
  else{f={id:uid(),estado:'activa',enviada:false,copia:false,...d};S.fac.push(f)}
- S.next=Math.max(S.next||0,n+1);addCli({nombre,file:d.file,calle,nif:d.nif,precio:base});save();go('fd',f.id);askCopy(f.id);
+ S.next=Math.max(S.next||0,n+1);addCli({nombre,file:d.file,calle,nif:d.nif,precio:base});{const cc=S.cli.find(x=>x.nombre.toLowerCase()==nombre.toLowerCase());if(cc){if(d.tablas==1)cc.copias=1;else delete cc.copias}}save();go('fd',f.id);askCopy(f.id);
 }
 V.fd=id=>{const f=S.fac.find(x=>x.id==id);if(!f)return'';
  return `<div class=card><div class=row><b>Factura nº ${f.num}</b><span class=mut>${fdate(f.fecha)}</span></div>
@@ -207,7 +210,7 @@ V.fd=id=>{const f=S.fac.find(x=>x.id==id);if(!f)return'';
  <div class="tot t"><span>Total</span><span>${eur(f.total)} €</span></div><div class=mut>Sin IVA ${eur(f.base)} € · IVA ${eur(f.iva)} € · Carpeta ${trL(f.trim)}</div>
  <div style="margin-top:10px">${tags(f)}</div></div>
  ${f.estado=='anulada'?'':`<button class=btn onclick="askSend('${id}')">📤 Enviar (WhatsApp o Yahoo)</button>
- <button class="btn s" onclick="askPrint('${id}')">🖨️ Imprimir</button>
+ <button class="btn s" onclick="askPrint('${id}')">🖨️ Imprimir (${(f.tablas||copiasOf(f))==1?'1 tabla':'2 tablas'})</button>
  <button class="btn ${f.copia?'s':'g'}" onclick="copyF('${id}')">💾 ${f.copia?'Guardar otra copia':'Guardar copia en Drive ('+trL(f.trim)+')'}</button>
  <button class="btn s" onclick="go('ff','${id}')">✏️ Corregir</button>
  <button class="btn r" onclick="anular('${id}')">Anular factura</button>`}`};
@@ -250,10 +253,10 @@ V.cl=()=>`<button class=btn onclick="go('cf','')">➕ Nuevo cliente</button>
  <input placeholder="Buscar cliente…" value="${esc(cq)}" oninput="cq=this.value;document.getElementById('lc').innerHTML=lc()" style="margin-bottom:12px"><div id=lc>${lc()}</div>`;
 const lc=()=>S.cli.filter(c=>nz(c.file+' '+c.nombre).includes(nz(cq))).sort((a,b)=>(a.file||a.nombre).localeCompare(b.file||b.nombre)).map(c=>`<div class=card onclick="go('cf','${c.id}')"><b>${esc(c.file||c.nombre)}</b><div class=mut>${c.file&&c.file!=c.nombre?esc(c.nombre)+' · ':''}${esc(c.calle)}</div></div>`).join('')||'<p class=mut>No hay clientes todavía. Se crean solos al hacer una factura.</p>';
 V.cf=id=>{const c=id&&S.cli.find(x=>x.id==id)||{};
- return `<div class=card><label style="margin-top:0">Nombre corto (para el archivo y para buscar)</label><input id=fl value="${esc(c.file)}"><label>Nombre completo (el que sale en la factura)</label><input id=n value="${esc(c.nombre)}"><label>Calle</label><input id=c value="${esc(c.calle)}"><label>NIF o CIF</label><input id=nf value="${esc(c.nif)}"><label>Precio habitual sin IVA (€)</label><input id=b inputmode=decimal value="${cm(c.precio)}">${c.copias==1?`<label>Al imprimir la factura</label><select id=cp><option value="1" selected>1 copia (una sola tabla)</option><option value="2">2 copias (lo normal)</option></select>`:''}</div>
+ return `<div class=card><label style="margin-top:0">Nombre corto (para el archivo y para buscar)</label><input id=fl value="${esc(c.file)}"><label>Nombre completo (el que sale en la factura)</label><input id=n value="${esc(c.nombre)}"><label>Calle</label><input id=c value="${esc(c.calle)}"><label>NIF o CIF</label><input id=nf value="${esc(c.nif)}"><label>Precio habitual sin IVA (€)</label><input id=b inputmode=decimal value="${cm(c.precio)}"></div>
  <button class=btn onclick="saveC('${id||''}')">Guardar cliente</button>${id?`<button class="btn r" onclick="delC('${id}')">Borrar cliente</button><p class=mut>Borrar un cliente no toca sus facturas.</p>`:''}`};
 function saveC(id){const g=i=>$('#'+i).value.trim();if(!g('n'))return alert('Falta el nombre.');
- if(id){const c=S.cli.find(x=>x.id==id);Object.assign(c,{nombre:g('n'),file:g('fl')||g('n'),calle:g('c'),nif:g('nf'),precio:num(g('b'))||undefined,copias:$('#cp')?+g('cp'):c.copias})}else addCli({nombre:g('n'),file:g('fl'),calle:g('c'),nif:g('nf'),precio:num(g('b'))});save();go('cl')}
+ if(id){const c=S.cli.find(x=>x.id==id);Object.assign(c,{nombre:g('n'),file:g('fl')||g('n'),calle:g('c'),nif:g('nf'),precio:num(g('b'))||undefined})}else addCli({nombre:g('n'),file:g('fl'),calle:g('c'),nif:g('nf'),precio:num(g('b'))});save();go('cl')}
 function delC(id){if(!confirm('¿Borrar este cliente?'))return;S.cli=S.cli.filter(c=>c.id!=id);save();go('cl')}
 V.aj=()=>{const m=S.me;
  return `<div class=card><label style="margin-top:0">Tu nombre (como sale en la factura)</label><input id=mn value="${esc(m.nombre)}"><label>NIF</label><input id=mi value="${esc(m.nif)}"><label>Móvil</label><input id=mt inputmode=tel value="${esc(m.tel)}"><label>Dirección (calle, CP y población)</label><input id=md value="${esc(m.dir)}">
