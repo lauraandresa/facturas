@@ -81,7 +81,7 @@ const trimOf=i=>i.slice(0,4)+'-T'+(Math.floor((+i.slice(5,7)-1)/3)+1);
 const trL=t=>t.split('-T')[1]+'T '+t.split('-')[0];
 function trimOpts(sel){const y=new Date().getFullYear(),o=[];for(let a=y+1;a>=y-1;a--)for(let q=4;q>=1;q--)o.push(a+'-T'+q);if(!o.includes(sel))o.push(sel);return o.map(t=>`<option value="${t}" ${t==sel?'selected':''}>${trL(t)}</option>`).join('')}
 const cliOpts=()=>'<option value="">— Elegir cliente —</option>'+S.cli.slice().sort((a,b)=>(a.file||a.nombre).localeCompare(b.file||b.nombre)).map(c=>`<option value="${c.id}">${esc(c.file||c.nombre)}</option>`).join('');
-function addCli(c){const k=(c.nombre||'').trim();if(!k)return;let x=S.cli.find(y=>y.nombre.toLowerCase()==k.toLowerCase());if(!x){x={id:uid()};S.cli.push(x)}x.nombre=k;x.file=(c.file||'').trim()||x.file||'';x.calle=c.calle||x.calle||'';x.nif=c.nif||x.nif||'';if(c.precio)x.precio=num(c.precio)}
+function addCli(c){const k=(c.nombre||'').trim();if(!k)return;let x=S.cli.find(y=>y.nombre.toLowerCase()==k.toLowerCase());if(!x){x={id:uid()};S.cli.push(x)}x.nombre=k;x.file=(c.file||'').trim()||x.file||'';x.calle=c.calle||x.calle||'';x.nif=c.nif||x.nif||'';if(c.precio)x.precio=num(c.precio);if(c.copias)x.copias=+c.copias}
 const tags=f=>f.estado=='anulada'?'<span class=tag>Anulada</span>':`<span class="tag ${f.enviada?'k':''}">${f.enviada?'Enviada':'Sin enviar'}</span><span class="tag ${f.copia?'k':'w'}">${f.copia?'Copia en Drive':'Falta copia en Drive'}</span>${f.corr?'<span class=tag>Corregida</span>':''}`;
 
 /* ---------- PDF ---------- */
@@ -102,13 +102,14 @@ function drawF(d,f,y){
  d.text('+21% IVA',L+2,t+62);d.text(eur(f.iva)+' €',R-2,t+62,{align:'right'});
  d.setFont('helvetica','bold');d.text('TOTAL',L+2,t+71);d.text(eur(f.total)+' €',R-2,t+71,{align:'right'});
 }
-function facPDF(f,n){const d=PDF();for(let i=0;i<n;i++)drawF(d,f,i*148);return d.output('blob')}
+function facPDF(f,n){const d=PDF();for(let i=0;i<n;i++)drawF(d,f,8+i*148);return d.output('blob')}
 function recPDF(L){const d=PDF();L.forEach((r,i)=>{const y=i*99+14;
  d.setFontSize(12);d.setFont('helvetica','bold');d.text('RECIBO',15,y);d.setFont('helvetica','normal');
  d.text('CONCEPTO: '+(r.concepto||''),15,y+10);d.text('DESTINATARIO: '+r.nombre,15,y+20);d.text('FECHA: '+fdate(r.fecha),15,y+30);
- d.setFont('helvetica','bold');d.text('TOTAL: '+eur(r.total)+' €',195,y+42,{align:'right'});d.setFont('helvetica','normal');d.text('Fdo.:',15,y+54);if(S.me.firma)d.addImage(S.me.firma,'PNG',28,y+44,50,20);
+ d.setFont('helvetica','bold');d.text('TOTAL: '+eur(r.total)+' €',195,y+42,{align:'right'});d.setFont('helvetica','normal');d.text('Fdo.:',15,y+54);
  if(i<2){d.setLineDash([2,2]);d.line(10,y+78,200,y+78);d.setLineDash([])}});return d.output('blob')}
 const fname=f=>`${(f.file||f.nombre).replace(/[\\/:*?"<>|]+/g,'-')} N${f.num}.pdf`;
+const copiasOf=f=>{const c=S.cli.find(x=>x.nombre==f.nombre);return c&&c.copias==1?1:2};
 const mk=(b,n,t)=>new File([b],n,{type:t||'application/pdf'});
 
 /* ---------- compartir ---------- */
@@ -120,7 +121,7 @@ async function shareFiles(files){
  alert('El móvil no abrió el menú de compartir. El archivo se ha descargado.');return 'dl';
 }
 async function sendF(id){const f=S.fac.find(x=>x.id==id);if(await shareFiles([mk(facPDF(f,1),fname(f))])===true){f.enviada=true;save();render()}}
-async function printF(id){const f=S.fac.find(x=>x.id==id);shareFiles([mk(facPDF(f,2),'IMPRIMIR_'+fname(f))])}
+async function printF(id,n){const f=S.fac.find(x=>x.id==id);shareFiles([mk(facPDF(f,n||2),'IMPRIMIR_'+fname(f))])}
 async function copyF(id){const f=S.fac.find(x=>x.id==id);if(await shareFiles([mk(facPDF(f,1),fname(f))])===true){f.copia=true;save();render()}}
 async function sendTrim(){const L=S.fac.filter(f=>f.trim==ftr&&f.estado!='anulada').sort((a,b)=>a.num-b.num);shareFiles(L.map(f=>mk(facPDF(f,1),fname(f))))}
 async function printR(id){const r=S.rec.find(x=>x.id==id);shareFiles([mk(recPDF(r.items),'IMPRIMIR_recibos.pdf')])}
@@ -130,7 +131,8 @@ const askCopy=id=>{const f=S.fac.find(x=>x.id==id);showM(`<h2>Guarda la copia</h
 
 const askPrintOffer=id=>showM(`<h2>Recibos guardados</h2><p>¿Los imprimes ahora?</p><button class="btn" onclick="askPrintR('${id}')">🖨️ Imprimir</button><button class="btn s" style="margin:0" onclick="closeM()">Ahora no</button>`);
 const steps=(t,l,fn)=>showM(`<h2>${t}</h2><ol style="padding-left:24px;font-size:20px;line-height:1.6">${l.map(s=>`<li>${s}</li>`).join('')}</ol><button class="btn" onclick="closeM();${fn}">Continuar</button><button class="btn s" style="margin:0" onclick="closeM()">Cancelar</button>`);
-const askPrint=id=>steps('Para imprimir',['Se abre una lista de aplicaciones.','Busca y selecciona <b>HP Print</b>.'],"printF('"+id+"')");
+const askPrintSteps=(id,n)=>steps('Para imprimir',['Se abre una lista de aplicaciones.','Busca y selecciona <b>HP Print</b>.'],"printF('"+id+"',"+n+")");
+const askPrint=id=>{const f=S.fac.find(x=>x.id==id);copiasOf(f)==1?showM(`<h2>Una sola tabla</h2><p>Se imprimirá una sola tabla en la hoja. ¿Está bien?</p><button class="btn" onclick="askPrintSteps('${id}',1)">Sí, una tabla</button><button class="btn s" style="margin:0" onclick="askPrintSteps('${id}',2)">No, hacer como todas</button>`):askPrintSteps(id,2)};
 const askPrintR=id=>steps('Para imprimir',['Se abre una lista de aplicaciones.','Busca y selecciona <b>HP Print</b>.'],"printR('"+id+"')");
 const askSend=id=>steps('Para enviar',['Se abre una lista de aplicaciones.','Selecciona <b>Yahoo</b> y escribe la dirección de correo,<br>o selecciona <b>WhatsApp</b> y el contacto.'],"sendF('"+id+"')");
 const askTrim=()=>steps('Para enviar al gestor',['Se abre una lista de aplicaciones.','Selecciona <b>Yahoo</b> y escribe la dirección de correo de la gestora.'],'sendTrim()');
@@ -221,21 +223,21 @@ function lf(){
  ${L.map(f=>fcard(f)).join('')||'<p class=mut>Todavía no hay facturas en este trimestre.</p>'}
  ${ok.length?`<button class="btn s" onclick="askTrim()">📤 Enviar ${ok.length==1?'la factura':'las '+ok.length+' facturas'} al gestor</button>`:''}`}
 V.rl=()=>`<button class=btn onclick="go('rf')">📝 Crear recibos</button>
- ${S.rec.slice().reverse().map(r=>`<div class=card><div class=row><b>${fdate(r.items[0].fecha)}</b><b>${eur(r2(r.items.reduce((s,i)=>s+i.total,0)))} €</b></div>
- <div class=mut style="margin:4px 0">${r.items.map(i=>esc(i.nombre)+' · '+eur(i.total)+' €').join('<br>')}</div>
+ ${S.rec.slice().reverse().map(r=>`<div class=card><div class=lbl>${r.items.length==1?'1 recibo':r.items.length+' recibos'}</div>${r.items.map(i=>`<div class=row style="margin-bottom:6px"><span><b>${esc(i.nombre)}</b> <span class=mut>${fdate(i.fecha)}</span></span><b>${eur(i.total)} €</b></div>`).join('')}
  <div class=row style="margin-top:10px"><button class="btn m" onclick="askPrintR('${r.id}')">🖨️ Imprimir</button><button class="btn s m" onclick="go('rf','${r.id}')">Editar</button></div>
  <div class=row style="margin-top:8px"><button class="btn r m" onclick="delR('${r.id}')">Borrar</button></div></div>`).join('')||'<p class=mut>Todavía no hay recibos.</p>'}`;
 function delR(id){if(!confirm('¿Borrar estos recibos?'))return;S.rec=S.rec.filter(r=>r.id!=id);save();render()}
-V.rf=id=>{const cur=id&&S.rec.find(x=>x.id==id),prev=cur||S.rec[S.rec.length-1],it=i=>(prev&&prev.items[i])||{},mine=i=>cur&&cur.items[i];
- const rows=[0,1,2].map(i=>{const p=it(i);return `<div class=card><b>Recibo ${i+1}</b>
- <label>Nombre</label><input id=n${i} list=cn value="${esc(p.nombre)}">
- <label>Fecha</label><input id=f${i} type=date value="${mine(i)?mine(i).fecha:today()}">
- <label>Importe (€)</label><input id=b${i} inputmode=decimal value="${cm(mine(i)?mine(i).total:'')}" placeholder="${!cur&&p.total!=null?'Antes: '+eur(p.total):''}"></div>`}).join('');
- return `${!cur&&prev?'<p class=mut>Salen los recibos de la última vez. Cambia las fechas y escribe los importes de hoy.</p>':''}
+V.rf=id=>{const cur=id&&S.rec.find(x=>x.id==id),last=S.rec[S.rec.length-1],mine=i=>(cur&&cur.items[i])||{};
+ const rows=[0,1,2].map(i=>{const m=mine(i);return `<div class=card><b>Recibo ${i+1}</b>
+ <label>Nombre</label><input id=n${i} list=cn value="${esc(m.nombre)}">
+ <label>Fecha</label><input id=f${i} type=date value="${m.fecha||today()}">
+ <label>Importe (€)</label><input id=b${i} inputmode=decimal value="${cm(m.total)}"></div>`}).join('');
+ return `${!cur&&last?`<button class="btn s" onclick="useLast()">↺ Usar los nombres de la última vez</button>`:''}
  <datalist id=cn>${S.cli.map(c=>`<option value="${esc(c.file||c.nombre)}">`).join('')}</datalist>${rows}
- <div class=card><label style="margin-top:0">Concepto (igual en todos)</label><input id=co value="${esc((prev&&prev.items[0]&&prev.items[0].concepto)||S.concepto)}"></div>
- <p class=mut>Si no quieres un recibo, deja vacíos su nombre y su importe.</p>
+ <div class=card><label style="margin-top:0">Concepto (igual en todos)</label><input id=co value="${esc((cur&&cur.items[0]&&cur.items[0].concepto)||S.concepto)}"></div>
+ <p class=mut>Rellena solo los recibos que necesites. Los que dejes vacíos no se imprimen.</p>
  <button class=btn onclick="saveR('${id||''}')">Guardar recibos</button>`};
+function useLast(){const l=S.rec[S.rec.length-1];l.items.forEach((it,i)=>{$('#n'+i).value=it.nombre});$('#co').value=l.items[0].concepto||S.concepto}
 function saveR(id){const g=i=>$('#'+i).value.trim(),items=[];
  for(let i=0;i<3;i++){const nombre=g('n'+i),total=r2(num(g('b'+i)));if(!nombre&&!total)continue;
   if(!nombre||total<=0)return alert('Recibo '+(i+1)+': falta el nombre o el importe. Si no lo quieres, deja las dos casillas vacías.');
@@ -248,15 +250,15 @@ V.cl=()=>`<button class=btn onclick="go('cf','')">➕ Nuevo cliente</button>
  <input placeholder="Buscar cliente…" value="${esc(cq)}" oninput="cq=this.value;document.getElementById('lc').innerHTML=lc()" style="margin-bottom:12px"><div id=lc>${lc()}</div>`;
 const lc=()=>S.cli.filter(c=>nz(c.file+' '+c.nombre).includes(nz(cq))).sort((a,b)=>(a.file||a.nombre).localeCompare(b.file||b.nombre)).map(c=>`<div class=card onclick="go('cf','${c.id}')"><b>${esc(c.file||c.nombre)}</b><div class=mut>${c.file&&c.file!=c.nombre?esc(c.nombre)+' · ':''}${esc(c.calle)}</div></div>`).join('')||'<p class=mut>No hay clientes todavía. Se crean solos al hacer una factura.</p>';
 V.cf=id=>{const c=id&&S.cli.find(x=>x.id==id)||{};
- return `<div class=card><label style="margin-top:0">Nombre corto (para el archivo y para buscar)</label><input id=fl value="${esc(c.file)}"><label>Nombre completo (el que sale en la factura)</label><input id=n value="${esc(c.nombre)}"><label>Calle</label><input id=c value="${esc(c.calle)}"><label>NIF o CIF</label><input id=nf value="${esc(c.nif)}"><label>Precio habitual sin IVA (€)</label><input id=b inputmode=decimal value="${cm(c.precio)}"></div>
+ return `<div class=card><label style="margin-top:0">Nombre corto (para el archivo y para buscar)</label><input id=fl value="${esc(c.file)}"><label>Nombre completo (el que sale en la factura)</label><input id=n value="${esc(c.nombre)}"><label>Calle</label><input id=c value="${esc(c.calle)}"><label>NIF o CIF</label><input id=nf value="${esc(c.nif)}"><label>Precio habitual sin IVA (€)</label><input id=b inputmode=decimal value="${cm(c.precio)}">${c.copias==1?`<label>Al imprimir la factura</label><select id=cp><option value="1" selected>1 copia (una sola tabla)</option><option value="2">2 copias (lo normal)</option></select>`:''}</div>
  <button class=btn onclick="saveC('${id||''}')">Guardar cliente</button>${id?`<button class="btn r" onclick="delC('${id}')">Borrar cliente</button><p class=mut>Borrar un cliente no toca sus facturas.</p>`:''}`};
 function saveC(id){const g=i=>$('#'+i).value.trim();if(!g('n'))return alert('Falta el nombre.');
- if(id){const c=S.cli.find(x=>x.id==id);Object.assign(c,{nombre:g('n'),file:g('fl')||g('n'),calle:g('c'),nif:g('nf'),precio:num(g('b'))||undefined})}else addCli({nombre:g('n'),file:g('fl'),calle:g('c'),nif:g('nf'),precio:num(g('b'))});save();go('cl')}
+ if(id){const c=S.cli.find(x=>x.id==id);Object.assign(c,{nombre:g('n'),file:g('fl')||g('n'),calle:g('c'),nif:g('nf'),precio:num(g('b'))||undefined,copias:$('#cp')?+g('cp'):c.copias})}else addCli({nombre:g('n'),file:g('fl'),calle:g('c'),nif:g('nf'),precio:num(g('b'))});save();go('cl')}
 function delC(id){if(!confirm('¿Borrar este cliente?'))return;S.cli=S.cli.filter(c=>c.id!=id);save();go('cl')}
 V.aj=()=>{const m=S.me;
  return `<div class=card><label style="margin-top:0">Tu nombre (como sale en la factura)</label><input id=mn value="${esc(m.nombre)}"><label>NIF</label><input id=mi value="${esc(m.nif)}"><label>Móvil</label><input id=mt inputmode=tel value="${esc(m.tel)}"><label>Dirección (calle, CP y población)</label><input id=md value="${esc(m.dir)}">
  <label>Próximo número de factura</label><input id=mx inputmode=numeric value="${S.next??''}"><label>Concepto de siempre</label><input id=mc value="${esc(S.concepto)}"></div>
- <div class=card><b>Mi firma</b><p class=mut>Dibuja tu firma con el dedo. Saldrá donde pone «Fdo.».</p><canvas id=sg width=600 height=240 style="width:100%;height:auto;border:2px solid var(--ln);border-radius:12px;background:#fff;touch-action:none"></canvas><button class="btn r m" style="margin-top:10px" onclick="clrSig()">Borrar firma</button></div>
+ <div class=card><b>Mi firma</b><p class=mut>Dibuja tu firma con el dedo. Saldrá en las facturas, donde pone «Fdo.». Los recibos salen sin firma.</p><canvas id=sg width=600 height=240 style="width:100%;height:auto;border:2px solid var(--ln);border-radius:12px;background:#fff;touch-action:none"></canvas><button class="btn r m" style="margin-top:10px" onclick="clrSig()">Borrar firma</button></div>
  <button class=btn onclick="saveA()">Guardar</button>
  <div class=card><b>Copia de seguridad</b><p class=mut>Última: ${S.bk?fdate(S.bk):'nunca'}. Guárdala en Drive.</p><button class="btn s" style="margin:0" onclick="backup()">💾 Hacer copia de seguridad</button></div>
  <div class=card><b>Cargar datos de un archivo</b><p class=mut>Para restaurar una copia o importar los clientes de Drive.</p><input type=file accept=".json,text/plain" onchange="imp(this)"></div>`};
